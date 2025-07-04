@@ -12,6 +12,7 @@ load_dotenv()
 def login_and_capture_schedule_AN(username_AN: str, password_AN: str) -> str:
     driver_path = os.getenv("CHROME_DRIVER_PATH")
     options = Options()
+    options.headless = True
     options.add_argument('--headless')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
@@ -49,4 +50,3 @@ def login_and_capture_schedule_AN(username_AN: str, password_AN: str) -> str:
         return output_path
     finally:
         driver.quit()
-

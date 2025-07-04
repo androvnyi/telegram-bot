@@ -16,7 +16,8 @@ from models_AN.subscription_model_AN import Subscription_AN
 from scraper_AN.login_capture_AN import login_and_capture_schedule_AN
 from models_AN.reminder_model_AN import ReminderSetting_AN
 from scheduler_AN.scheduler_reminders_AN import check_upcoming_classes
-
+from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 
 load_dotenv()
@@ -236,15 +237,15 @@ async def check_subscriptions():
     for sub in subs:
         user = db.query(User_AN).get(sub.user_id)
         if not user or not user.username or not user.password:
-            db.delete(sub)  # очистка сиріт
+            db.delete(sub)
             db.commit()
             continue
 
-        # ⛔ Пропускаємо, якщо користувача вже нема
+
         if not user:
             continue
 
-        # ⛔ Пропускаємо, якщо користувач без логіна/пароля
+
         if not user.username or not user.password:
             continue
 
@@ -303,7 +304,7 @@ async def set_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE, r10: 
         reply_markup=build_main_menu()
     )
 
-# Спрощення
+
 async def set_10_AN(update, context): await set_reminder(update, context, 1, 0)
 async def set_30_AN(update, context): await set_reminder(update, context, 0, 1)
 async def set_both_AN(update, context): await set_reminder(update, context, 1, 1)
@@ -313,12 +314,20 @@ async def set_off_AN(update, context): await set_reminder(update, context, 0, 0)
 async def set_commands_AN(application):
     global bot_instance
     bot_instance = application.bot
+
     await bot_instance.set_my_commands([
         BotCommand("start", "Show main menu"),
         BotCommand("login", "Log in with your USOS credentials"),
         BotCommand("logout", "Log out and clear credentials"),
         BotCommand("week", "Get this week's schedule"),
     ])
+
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(check_upcoming_classes, trigger='interval', minutes=1)
+    scheduler.add_job(check_subscriptions, trigger='interval', minutes=1)  # 🟢 без lambda та create_task
+    scheduler.start()
+
+
 
 if __name__ == "__main__":
     app_AN = (
@@ -327,12 +336,6 @@ if __name__ == "__main__":
         .post_init(set_commands_AN)
         .build()
     )
-
-    loop = asyncio.get_event_loop()
-    scheduler = AsyncIOScheduler(event_loop=loop)
-    scheduler.add_job(check_upcoming_classes, 'interval', minutes=1)
-    scheduler.add_job(lambda: asyncio.create_task(check_subscriptions()), 'interval', hours=1)
-    scheduler.start()
 
     app_AN.add_handler(CommandHandler("start", start_AN))
     app_AN.add_handler(CommandHandler("login", login_command_AN))
@@ -351,5 +354,8 @@ if __name__ == "__main__":
     app_AN.add_handler(CallbackQueryHandler(set_both_AN, pattern="^set_both$"))
     app_AN.add_handler(CallbackQueryHandler(set_off_AN, pattern="^set_off$"))
 
-    print("Bot is up and running with scheduler...")
+    print("✅ Bot is up and running with scheduler...")
     app_AN.run_polling()
+
+
+
