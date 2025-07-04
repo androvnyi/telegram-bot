@@ -1,7 +1,6 @@
 from sqlalchemy import Column, Integer, String
-from db_AN.database_AN import Base
 from sqlalchemy.orm import relationship
-from .subscription_model_AN import Subscription_AN
+from db_AN.database_AN import Base
 
 class User_AN(Base):
     __tablename__ = "users"
@@ -10,4 +9,5 @@ class User_AN(Base):
     telegram_id = Column(Integer, unique=True, index=True, nullable=False)
     username = Column(String, nullable=False)
     password = Column(String, nullable=False)
+
     subscription = relationship("Subscription_AN", back_populates="user", uselist=False)

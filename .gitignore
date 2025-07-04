@@ -1,5 +1,8 @@
-# .venv/
-# .env
-# .idea/
-#pycache/
-# *.pyc
+ .venv/
+ .env
+ .idea/
+pycache/
+ *.pyc
+.sqlite3
+.db
+generate_key.py

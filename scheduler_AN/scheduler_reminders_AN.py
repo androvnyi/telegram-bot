@@ -12,7 +12,7 @@ from telegram import Bot
 
 load_dotenv()
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
-TESSERACT_PATH = os.getenv("TESSERACT_PATH")  # Example: 'C:/Program Files/Tesseract-OCR/tesseract.exe'
+TESSERACT_PATH = os.getenv("TESSERACT_PATH")
 
 if TESSERACT_PATH:
     pytesseract.pytesseract.tesseract_cmd = TESSERACT_PATH
@@ -23,8 +23,6 @@ def extract_times_from_image(image_path):
     try:
         img = Image.open(image_path)
         text = pytesseract.image_to_string(img)
-
-        # Парсимо часи, наприклад: "08:00", "10.10", "12:30"
         time_matches = re.findall(r'\b\d{1,2}[:.]\d{2}\b', text)
 
         parsed_times = []

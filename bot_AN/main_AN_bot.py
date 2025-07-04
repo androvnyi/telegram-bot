@@ -18,6 +18,9 @@ from models_AN.reminder_model_AN import ReminderSetting_AN
 from scheduler_AN.scheduler_reminders_AN import check_upcoming_classes
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from scheduler_AN.crypto_AN import encrypt_password
+from scheduler_AN.crypto_AN import decrypt_password
+
 
 
 load_dotenv()
@@ -43,14 +46,12 @@ def build_main_menu():
         [InlineKeyboardButton("🚪 Logout", callback_data="logout")],
     ])
 
-# /start
 async def start_AN(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "Welcome! Choose an action:",
         reply_markup=build_main_menu()
     )
 
-# Button callbacks
 async def login_query_AN(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.callback_query.answer()
     db = SessionLocal()
@@ -67,6 +68,7 @@ async def login_query_AN(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
 
 async def schedule_query_AN(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    from scheduler_AN.crypto_AN import decrypt_password
     await update.callback_query.answer()
     db = SessionLocal()
     user = get_user(db, update.effective_user.id)
@@ -74,11 +76,15 @@ async def schedule_query_AN(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if not user:
         await update.callback_query.message.reply_text("Please /login first.")
         return
+
+    real_password = decrypt_password(user.password)
+
     await update.callback_query.message.reply_text("Fetching your weekly schedule…")
-    img_path = login_and_capture_schedule_AN(user.username, user.password)
+    img_path = login_and_capture_schedule_AN(user.username, decrypt_password(user.password))
     with open(img_path, 'rb') as photo:
         await update.callback_query.message.reply_photo(photo=photo)
     os.remove(img_path)
+
 
 async def notifications_query_AN(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.callback_query.answer()
@@ -101,17 +107,12 @@ async def logout_query_AN(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     user = get_user(db, update.effective_user.id)
 
     if user:
-        # 🔴 Видаляємо підписку (notifications)
         sub = get_subscription(db, user.id)
         if sub:
             db.delete(sub)
-
-        # 🔴 Видаляємо налаштування нагадувань
         setting = db.query(ReminderSetting_AN).filter_by(user_id=user.id).first()
         if setting:
             db.delete(setting)
-
-        # 🟢 Видаляємо самого користувача
         db.delete(user)
         db.commit()
 
@@ -133,6 +134,7 @@ async def logout_command_AN(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def subscribe_AN(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    from scheduler_AN.crypto_AN import decrypt_password
     await update.callback_query.answer()
     db = SessionLocal()
     user = get_user(db, update.effective_user.id)
@@ -140,7 +142,11 @@ async def subscribe_AN(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.callback_query.message.reply_text("Please /login first.")
         db.close()
         return
-    img_path = login_and_capture_schedule_AN(user.username, user.password)
+
+    real_password = decrypt_password(user.password)
+
+    img_path = login_and_capture_schedule_AN(user.username, decrypt_password(user.password))
+
     with open(img_path, 'rb') as f:
         content = f.read()
     os.remove(img_path)
@@ -157,6 +163,7 @@ async def subscribe_AN(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "🔔 Subscribed to schedule changes!",
         reply_markup=build_main_menu()
     )
+
 
 async def unsubscribe_AN(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.callback_query.answer()
@@ -187,13 +194,16 @@ async def back_AN(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "Main menu:", reply_markup=build_main_menu()
     )
 
-# Command handlers
+
 async def login_command_AN(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     args = context.args
     if len(args) != 2:
         await update.message.reply_text("Usage: /login <username> <password>")
         return
+
     username_AN, password_AN = args
+    encrypted_password = encrypt_password(password_AN)
+
     try:
         db = SessionLocal()
         user = get_user(db, update.effective_user.id)
@@ -201,56 +211,61 @@ async def login_command_AN(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             user = User_AN(
                 telegram_id=update.effective_user.id,
                 username=username_AN,
-                password=password_AN,
+                password=encrypted_password,
             )
             db.add(user)
         else:
             user.username = username_AN
-            user.password = password_AN
+            user.password = encrypted_password
+
         db.commit()
         db.close()
         await update.message.reply_text(
-            "You have been logged in successfully!\n"
+            "You have been logged in securely 🔐!\n"
             "Press '📅 My Weekly Schedule' to fetch your schedule.",
             reply_markup=build_main_menu()
         )
     except Exception as e:
         await update.message.reply_text(f"Login failed: {e}")
 
+
 async def week_command_AN(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    from scheduler_AN.crypto_AN import decrypt_password
     db = SessionLocal()
     user = get_user(db, update.effective_user.id)
     db.close()
     if not user:
         await update.message.reply_text("Please /login first.")
         return
+
+    real_password = decrypt_password(user.password)
+
     await update.message.reply_text("Fetching your weekly schedule…")
-    img_path = login_and_capture_schedule_AN(user.username, user.password)
+    img_path = login_and_capture_schedule_AN(user.username, decrypt_password(user.password))
     with open(img_path, 'rb') as photo:
         await update.message.reply_photo(photo=photo)
     os.remove(img_path)
 
-# Background check (no update/context)
+
 async def check_subscriptions():
+    from scheduler_AN.crypto_AN import decrypt_password
+
     db = SessionLocal()
     subs = db.query(Subscription_AN).all()
+
     for sub in subs:
         user = db.query(User_AN).get(sub.user_id)
+
         if not user or not user.username or not user.password:
             db.delete(sub)
             db.commit()
             continue
 
-
-        if not user:
-            continue
-
-
-        if not user.username or not user.password:
-            continue
-
         try:
-            img_path = login_and_capture_schedule_AN(user.username, user.password)
+            real_password = decrypt_password(user.password)
+
+            img_path = login_and_capture_schedule_AN(user.username, decrypt_password(user.password))
+
             with open(img_path, 'rb') as f:
                 content = f.read()
             new_hash = hashlib.md5(content).hexdigest()
@@ -258,19 +273,22 @@ async def check_subscriptions():
             if new_hash != sub.schedule_hash:
                 sub.schedule_hash = new_hash
                 db.commit()
+
                 await bot_instance.send_message(
                     chat_id=user.telegram_id,
-                    text=" ❗️❗️❗️Your schedule has changed! Here's the updated version:"
+                    text="❗️❗️❗️Your schedule has changed! Here's the updated version:"
                 )
                 with open(img_path, 'rb') as photo:
                     await bot_instance.send_photo(chat_id=user.telegram_id, photo=photo)
 
             os.remove(img_path)
+
         except Exception as e:
             print(f"Error for user {user.telegram_id}: {e}")
             continue
 
     db.close()
+
 
 
 async def reminders_query_AN(update: Update, context: ContextTypes.DEFAULT_TYPE):
