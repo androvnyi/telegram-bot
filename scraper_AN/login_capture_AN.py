@@ -11,7 +11,8 @@ from selenium.webdriver.common.by import By
 load_dotenv()
 
 
-def login_and_capture_schedule_AN(username_AN: str, password_AN: str) -> str:
+def login_and_capture_schedule_AN(username_AN: str, password_AN: str, return_html: bool = False) -> str:
+
     driver_path = os.getenv("CHROME_DRIVER_PATH")
     options = Options()
     options.add_argument('--headless=new')  # новий стабільний headless
@@ -60,6 +61,9 @@ def login_and_capture_schedule_AN(username_AN: str, password_AN: str) -> str:
 
         with open(output_path, "wb") as file:
             file.write(response.content)
+            if return_html:
+                return driver.page_source
+
         return output_path
 
     finally:
